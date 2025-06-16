@@ -9,7 +9,7 @@ import logging
 
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
-from neo4j_nodes_library.connection.neo4j_connection import Neo4jSessionWrapper
+from connection.neo4j_connection import Neo4jSessionWrapper
 
 logger = logging.getLogger("griptape_nodes")
 

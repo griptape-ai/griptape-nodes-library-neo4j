@@ -13,7 +13,7 @@ import neo4j
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
 from griptape_nodes.traits.options import Options
-from neo4j_nodes_library.config.neo4j_driver import Neo4jDriverRegistry
+from config.neo4j_driver import Neo4jDriverRegistry
 
 logger = logging.getLogger("griptape_nodes")
 
