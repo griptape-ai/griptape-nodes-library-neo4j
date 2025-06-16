@@ -1,9 +1,9 @@
 [project]
-name = "example_nodes_template"
+name = "Griptape Nodes Neo4j Nodes Library"
 version = "0.1.0"
-description = "Template for Users to create Custom Libraries and Nodes"
+description = "Library for creating, managing, and querying Neo4j databases from within Griptape Nodes."
 authors = [
-    {name = "Your Name",email = "you@example.com"}
+    {name = "Griptape AI",email = "hello@griptape.ai"}
 ]
 readme = "README.md"
 requires-python = "~=3.12"

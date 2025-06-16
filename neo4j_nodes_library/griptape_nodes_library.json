@@ -1,0 +1,140 @@
+{
+  "name": "Griptape Nodes Neo4j Library",
+  "library_schema_version": "0.1.0",
+  "metadata": {
+    "author": "Griptape, Inc.",
+    "description": "Neo4j graph database integration nodes for Griptape Nodes.",
+    "library_version": "0.34.0",
+    "engine_version": "0.34.0",
+    "tags": [
+      "Griptape",
+      "Neo4j",
+      "Graph Database"
+    ],
+    "dependencies": {
+      "pip_dependencies": [
+        "neo4j>=5.25.0"
+      ]
+    }
+  },
+  "settings": [
+    {
+      "description": "Environment variables for Neo4j database connection defaults",
+      "category": "nodes.Neo4j",
+      "contents": {
+        "NEO4J_URI": "$NEO4J_URI",
+        "NEO4J_DATABASE": "$NEO4J_DATABASE",
+        "NEO4J_USERNAME": "$NEO4J_USERNAME", 
+        "NEO4J_PASSWORD": "$NEO4J_PASSWORD"
+      }
+    }
+  ],
+  "categories": [
+    {
+      "neo4j": {
+        "color": "border-green-500",
+        "title": "Neo4j",
+        "description": "Neo4j graph database nodes",
+        "icon": "CircleStack"
+      }
+    },
+    {
+      "neo4j/connection": {
+        "color": "border-green-500",
+        "title": "Neo4j Connection",
+        "description": "Neo4j database connection nodes",
+        "icon": "Link"
+      }
+    },
+    {
+      "neo4j/query": {
+        "color": "border-blue-500",
+        "title": "Neo4j Query",
+        "description": "Neo4j query execution nodes",
+        "icon": "MagnifyingGlass"
+      }
+    },
+    {
+      "neo4j/crud": {
+        "color": "border-purple-500",
+        "title": "Neo4j CRUD",
+        "description": "Neo4j create, read, update, delete operations",
+        "icon": "PencilSquare"
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "class_name": "Neo4jConnection",
+      "file_path": "neo4j_nodes_library/connection/neo4j_connection.py",
+      "metadata": {
+        "category": "neo4j/connection",
+        "description": "Creates a connection to a Neo4j database",
+        "display_name": "Neo4j Connection"
+      }
+    },
+    {
+      "class_name": "Neo4jDriver",
+      "file_path": "neo4j_nodes_library/config/neo4j_driver.py",
+      "metadata": {
+        "category": "neo4j/connection",
+        "description": "Neo4j database driver configuration",
+        "display_name": "Neo4j Driver"
+      }
+    },
+    {
+      "class_name": "ExecuteCypher",
+      "file_path": "neo4j_nodes_library/query/execute_cypher.py",
+      "metadata": {
+        "category": "neo4j/query",
+        "description": "Execute a Cypher query against a Neo4j database",
+        "display_name": "Execute Cypher"
+      }
+    },
+    {
+      "class_name": "CreateNode",
+      "file_path": "neo4j_nodes_library/crud/create_node.py",
+      "metadata": {
+        "category": "neo4j/crud",
+        "description": "Create a node in the Neo4j database",
+        "display_name": "Create Node"
+      }
+    },
+    {
+      "class_name": "CreateRelationship",
+      "file_path": "neo4j_nodes_library/crud/create_relationship.py",
+      "metadata": {
+        "category": "neo4j/crud",
+        "description": "Create a relationship between nodes in the Neo4j database",
+        "display_name": "Create Relationship"
+      }
+    },
+    {
+      "class_name": "FindNodes",
+      "file_path": "neo4j_nodes_library/crud/find_nodes.py",
+      "metadata": {
+        "category": "neo4j/crud",
+        "description": "Find and retrieve nodes from the Neo4j database",
+        "display_name": "Find Nodes"
+      }
+    },
+    {
+      "class_name": "UpdateNode",
+      "file_path": "neo4j_nodes_library/crud/update_node.py",
+      "metadata": {
+        "category": "neo4j/crud",
+        "description": "Update properties of nodes in the Neo4j database",
+        "display_name": "Update Node"
+      }
+    },
+    {
+      "class_name": "DeleteNode",
+      "file_path": "neo4j_nodes_library/crud/delete_node.py",
+      "metadata": {
+        "category": "neo4j/crud",
+        "description": "Delete nodes from the Neo4j database",
+        "display_name": "Delete Node"
+      }
+    }
+  ]
+}
