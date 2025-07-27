@@ -1,11 +1,11 @@
 {
   "name": "Griptape Nodes Neo4j Library",
-  "library_schema_version": "0.1.0",
+  "library_schema_version": "0.2.0",
   "metadata": {
     "author": "Griptape, Inc.",
     "description": "Neo4j graph database integration nodes for Griptape Nodes.",
-    "library_version": "0.34.0",
-    "engine_version": "0.37.1",
+    "library_version": "0.41.0",
+    "engine_version": "0.42.0",
     "tags": [
       "Griptape",
       "Neo4j",
