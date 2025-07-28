@@ -55,13 +55,14 @@ class ExecuteCypher(ControlNode):
             )
         )
 
-        # Query parameters (JSON string)
+        # Query parameters (JSON string or JSON object)
         self.add_parameter(
             Parameter(
                 name="parameters",
+                input_types=["str", "json"],
                 output_type="str",
                 default_value="{}",
-                tooltip='Query parameters as JSON object (e.g., {"name": "Alice", "age": 30})',
+                tooltip='Query parameters as JSON string or JSON object (e.g., {"name": "Alice", "age": 30})',
                 ui_options={"display_name": "Parameters", "multiline": True, "rows": 3},
             )
         )
@@ -261,26 +262,33 @@ class ExecuteCypher(ControlNode):
         else:
             return value
 
-    def _parse_parameters(self, parameters_str: str) -> dict:
-        """Parses JSON parameter string into a dictionary.
+    def _parse_parameters(self, parameters_input: str | dict) -> dict:
+        """Parses JSON parameter string or dict into a dictionary.
 
         Args:
-            parameters_str: JSON string containing query parameters
+            parameters_input: JSON string or dict containing query parameters
 
         Returns:
             Dictionary of parsed parameters
 
         Raises:
-            ValueError: If JSON is invalid
+            ValueError: If JSON string is invalid or input type is unsupported
         """
-        if not parameters_str.strip():
-            return {}
-
-        try:
-            return json.loads(parameters_str)
-        except json.JSONDecodeError as e:
-            msg = f"Invalid JSON in parameters: {e!s}"
-            raise ValueError(msg) from e
+        if isinstance(parameters_input, dict):
+            return parameters_input
+        
+        if isinstance(parameters_input, str):
+            if not parameters_input.strip():
+                return {}
+            
+            try:
+                return json.loads(parameters_input)
+            except json.JSONDecodeError as e:
+                msg = f"Invalid JSON in parameters: {e!s}"
+                raise ValueError(msg) from e
+        
+        msg = f"ExecuteCypher: parameters input must be str or dict, got {type(parameters_input)}"
+        raise ValueError(msg)
 
     def process(self) -> None:
         """Processes the node to execute the Cypher query.
@@ -292,7 +300,7 @@ class ExecuteCypher(ControlNode):
             # Get parameter values
             session = self.get_parameter_value("session")
             cypher_query = self.get_parameter_value("cypher_query")
-            parameters_str = self.get_parameter_value("parameters")
+            parameters_input = self.get_parameter_value("parameters")
             limit = self.get_parameter_value("limit")
             consume_all = self.get_parameter_value("consume_all")
 
@@ -300,7 +308,7 @@ class ExecuteCypher(ControlNode):
             self._validate_inputs(session, cypher_query)
 
             # Parse parameters
-            parameters = self._parse_parameters(parameters_str)
+            parameters = self._parse_parameters(parameters_input)
 
             # Execute query
             result = session.run(cypher_query, parameters)
