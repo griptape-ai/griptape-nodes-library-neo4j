@@ -359,9 +359,15 @@ class ExecuteCypher(ControlNode):
 
         # Validate parameters JSON
         try:
-            parameters_str = self.get_parameter_value("parameters")
-            if parameters_str.strip():
-                json.loads(parameters_str)
+            parameters_input = self.get_parameter_value("parameters")
+            if isinstance(parameters_input, str):
+                if parameters_input.strip():
+                    json.loads(parameters_input)
+            elif isinstance(parameters_input, dict):
+                # Dict is already valid, no validation needed
+                pass
+            else:
+                exceptions.append(ValueError(f"Parameters must be string or dict, got {type(parameters_input)}"))
         except json.JSONDecodeError as e:
             exceptions.append(ValueError(f"Invalid JSON in parameters: {e!s}"))
 
