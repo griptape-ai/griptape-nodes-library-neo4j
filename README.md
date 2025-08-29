@@ -32,7 +32,7 @@ This library contains 8 specialized nodes that enable seamless interaction with 
 1. Clone this repository to your Griptape Nodes workspace:
    ```bash
    cd $(gtn config show | grep workspace_directory | cut -d'"' -f4)
-   git clone https://github.com/your-repo/griptape-nodes-library-neo4j.git
+   git clone https://github.com/griptape-ai/griptape-nodes-library-neo4j.git
    ```
 
 2. Add the library to your Griptape Nodes engine:
