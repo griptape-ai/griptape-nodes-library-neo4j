@@ -8,9 +8,9 @@ import json
 import logging
 from typing import Any
 
+from connection.neo4j_connection import Neo4jSessionWrapper
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
-from connection.neo4j_connection import Neo4jSessionWrapper
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -379,8 +379,14 @@ class CreateRelationship(ControlNode):
 
             # Build and execute query
             query, parameters = self._build_create_query(
-                start_labels, start_props, end_labels, end_props, rel_type, rel_props,
-                create_missing=create_missing, return_rel=return_rel
+                start_labels,
+                start_props,
+                end_labels,
+                end_props,
+                rel_type,
+                rel_props,
+                create_missing=create_missing,
+                return_rel=return_rel,
             )
 
             result = session.run(query, parameters)
