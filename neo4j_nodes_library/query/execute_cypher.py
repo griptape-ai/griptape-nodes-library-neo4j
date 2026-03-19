@@ -10,7 +10,6 @@ import logging
 from typing import Any
 
 import neo4j
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
 
@@ -276,17 +275,17 @@ class ExecuteCypher(ControlNode):
         """
         if isinstance(parameters_input, dict):
             return parameters_input
-        
+
         if isinstance(parameters_input, str):
             if not parameters_input.strip():
                 return {}
-            
+
             try:
                 return json.loads(parameters_input)
             except json.JSONDecodeError as e:
                 msg = f"Invalid JSON in parameters: {e!s}"
                 raise ValueError(msg) from e
-        
+
         msg = f"ExecuteCypher: parameters input must be str or dict, got {type(parameters_input)}"
         raise ValueError(msg)
 

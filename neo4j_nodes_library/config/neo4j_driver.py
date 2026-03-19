@@ -17,11 +17,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 import neo4j
-from neo4j import GraphDatabase
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import DataNode
 from griptape_nodes.traits.options import Options
+from neo4j import GraphDatabase
 
 # NOTE: There is a known bug in the Neo4j Python driver where __del__ methods fail
 # with "AttributeError: 'NoneType' object has no attribute 'close'" during garbage
@@ -32,6 +31,7 @@ from griptape_nodes.traits.options import Options
 
 class DriverKey(NamedTuple):
     """Key for identifying unique driver configurations."""
+
     uri: str
     auth: str
     config: str
