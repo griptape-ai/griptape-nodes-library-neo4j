@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 LIBRARY_JSON := neo4j_nodes_library/griptape_nodes_library.json
 
 .PHONY: version/get
