@@ -12,7 +12,9 @@
             "Graph Database"
         ],
         "dependencies": {
-            "pip_dependencies": []
+            "pip_dependencies": [
+                "neo4j>=5.25.0"
+            ]
         }
     },
     "settings": [
