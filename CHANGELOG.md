@@ -10,4 +10,4 @@ the `library_version` in `neo4j_nodes_library/griptape_nodes_library.json`.
 
 <!-- Entries go in changelog.d/, one file each. See changelog.d/README.md. -->
 
-[Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-neo4j/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-neo4j/compare/a6e2e394fd23fe509b875a5000d39074b6d09864...HEAD
