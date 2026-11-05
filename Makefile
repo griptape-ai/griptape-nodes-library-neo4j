@@ -107,7 +107,7 @@ fix: ## Fix project.
 	@uv run ruff check --fix --unsafe-fixes
 
 .PHONY: check
-check: check/format check/lint check/types check/changelog ## Run all checks.
+check: check/format check/lint check/types check/tests check/changelog ## Run all checks.
 
 .PHONY: check/format
 check/format:
@@ -120,6 +120,10 @@ check/lint:
 .PHONY: check/types
 check/types:
 	@uv run pyright .
+
+.PHONY: check/tests
+check/tests:
+	@uv run pytest -q
 
 .PHONY: check/changelog
 check/changelog: ## Check CHANGELOG.md and the changelog.d entries follow Keep a Changelog.

@@ -4,12 +4,12 @@ This module provides the `UpdateNode` class, which allows users to update
 properties of existing nodes in a Neo4j database.
 """
 
-import json
 import logging
 
 from connection.neo4j_connection import Neo4jSessionWrapper
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -108,10 +108,9 @@ class UpdateNode(ControlNode):
         )
 
     def _validate_session_or_raise(self, session: Neo4jSessionWrapper | None) -> None:
-        """Validate session is not None or raise ValueError."""
+        """Raise a NodeError when no session is connected."""
         if session is None:
-            msg = "Neo4j session is required"
-            raise ValueError(msg)
+            raise missing_session_error()
 
     def process(self) -> None:
         """Processes the node to update nodes in the Neo4j database."""
@@ -126,8 +125,8 @@ class UpdateNode(ControlNode):
 
             # Parse parameters
             match_labels = [label.strip() for label in match_labels_str.split(",") if label.strip()]
-            match_props = json.loads(match_props_str) if match_props_str.strip() else {}
-            update_props = json.loads(update_props_str) if update_props_str.strip() else {}
+            match_props = parse_json_object(match_props_str, "Match Properties")
+            update_props = parse_json_object(update_props_str, "Update Properties")
 
             # Build query
             label_part = ":" + ":".join(match_labels) if match_labels else ""
@@ -169,31 +168,19 @@ class UpdateNode(ControlNode):
             if message_param:
                 message_param._ui_options["hide"] = True
 
+        except NodeError:
+            raise
         except Exception as e:
-            error_msg = f"❌ Failed to update nodes: {e!s}"
-            logger.error(error_msg)
+            raise node_error_from_exception(e, action="update the nodes") from e
 
-            self.parameter_output_values["message"] = error_msg
-            message_param = self.get_parameter_by_name("message")
-            if message_param:
-                message_param._ui_options["hide"] = False
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Validates the update parameters once upstream nodes have supplied them."""
+        exceptions: list[Exception] = []
 
-            self.parameter_output_values["updated_count"] = 0
-
-    def validate_before_workflow_run(self) -> list[Exception] | None:
-        """Validates the update parameters."""
-        exceptions = []
-
-        # Skip session validation here - it will be validated when the node runs
-        # after dependency resolution has provided the session
-
-        # Validate JSON parameters
-        for param_name in ["match_properties", "update_properties"]:
+        for param_name, label in [("match_properties", "Match Properties"), ("update_properties", "Update Properties")]:
             try:
-                param_value = self.get_parameter_value(param_name)
-                if param_value.strip():
-                    json.loads(param_value)
-            except json.JSONDecodeError as e:
-                exceptions.append(ValueError(f"Invalid JSON in {param_name}: {e!s}"))
+                parse_json_object(self.get_parameter_value(param_name), label)
+            except NodeError as e:
+                exceptions.append(e)
 
         return exceptions if exceptions else None

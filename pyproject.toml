@@ -48,10 +48,14 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
+[tool.pytest.ini_options]
+pythonpath = [".", "neo4j_nodes_library"]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
 include = ["."]
+extraPaths = ["neo4j_nodes_library"]
 exclude = [".venv", "**/node_modules", "**/__pycache__", "**/.*", "templates"]
 pythonVersion = "3.12"
 reportIncompatibleMethodOverride = false
