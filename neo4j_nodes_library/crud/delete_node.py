@@ -4,12 +4,12 @@ This module provides the `DeleteNode` class, which allows users to delete
 nodes from a Neo4j database based on specified criteria.
 """
 
-import json
 import logging
 
 from connection.neo4j_connection import Neo4jSessionWrapper
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -108,16 +108,15 @@ class DeleteNode(ControlNode):
         )
 
     def _validate_session_or_raise(self, session: Neo4jSessionWrapper | None) -> None:
-        """Validate session is not None or raise ValueError."""
+        """Raise a NodeError when no session is connected."""
         if session is None:
-            msg = "Neo4j session is required"
-            raise ValueError(msg)
+            raise missing_session_error()
 
     def _validate_confirm_delete_or_raise(self, *, confirm_delete: bool) -> None:
-        """Validate delete confirmation is True or raise ValueError."""
+        """Raise a NodeError unless delete is confirmed."""
         if not confirm_delete:
-            msg = "Delete confirmation is required"
-            raise ValueError(msg)
+            msg = "Deleting is not confirmed. Turn on 'Confirm Delete' and run the node again."
+            raise NodeError(msg)
 
     def process(self) -> None:
         """Processes the node to delete nodes from the Neo4j database."""
@@ -133,7 +132,7 @@ class DeleteNode(ControlNode):
 
             # Parse parameters
             match_labels = [label.strip() for label in match_labels_str.split(",") if label.strip()]
-            match_props = json.loads(match_props_str) if match_props_str.strip() else {}
+            match_props = parse_json_object(match_props_str, "Match Properties")
 
             # Build query
             label_part = ":" + ":".join(match_labels) if match_labels else ""
@@ -168,34 +167,19 @@ class DeleteNode(ControlNode):
             if message_param:
                 message_param._ui_options["hide"] = True
 
+        except NodeError:
+            raise
         except Exception as e:
-            error_msg = f"❌ Failed to delete nodes: {e!s}"
-            logger.error(error_msg)
+            raise node_error_from_exception(e, action="delete the nodes") from e
 
-            self.parameter_output_values["message"] = error_msg
-            message_param = self.get_parameter_by_name("message")
-            if message_param:
-                message_param._ui_options["hide"] = False
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Validates the delete parameters once upstream nodes have supplied them."""
+        exceptions: list[Exception] = []
 
-            self.parameter_output_values["deleted_count"] = 0
-
-    def validate_before_workflow_run(self) -> list[Exception] | None:
-        """Validates the delete parameters."""
-        exceptions = []
-
-        # Skip session validation here - it will be validated when the node runs
-        # after dependency resolution has provided the session
-
-        confirm_delete = self.get_parameter_value("confirm_delete")
-        if not confirm_delete:
-            exceptions.append(ValueError("Delete confirmation is required"))
-
-        # Validate JSON parameters
         try:
-            match_props_str = self.get_parameter_value("match_properties")
-            if match_props_str.strip():
-                json.loads(match_props_str)
-        except json.JSONDecodeError as e:
-            exceptions.append(ValueError(f"Invalid JSON in match_properties: {e!s}"))
+            self._validate_confirm_delete_or_raise(confirm_delete=self.get_parameter_value("confirm_delete"))
+            parse_json_object(self.get_parameter_value("match_properties"), "Match Properties")
+        except NodeError as e:
+            exceptions.append(e)
 
         return exceptions if exceptions else None

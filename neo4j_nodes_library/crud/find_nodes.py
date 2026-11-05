@@ -5,13 +5,13 @@ for nodes in a Neo4j database using various criteria like labels, properties,
 and custom where clauses.
 """
 
-import json
 import logging
 from typing import Any
 
 from connection.neo4j_connection import Neo4jSessionWrapper
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -189,16 +189,9 @@ class FindNodes(ControlNode):
             Dictionary of parsed data
 
         Raises:
-            ValueError: If JSON is invalid
+            NodeError: If JSON is invalid
         """
-        if not json_str.strip():
-            return {}
-
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            msg = f"Invalid JSON in {param_name}: {e!s}"
-            raise ValueError(msg) from e
+        return parse_json_object(json_str, param_name)
 
     def _build_match_query(self, labels: list[str]) -> str:
         """Builds the MATCH part of the query.
@@ -258,10 +251,9 @@ class FindNodes(ControlNode):
         return {"id": node.id, "labels": list(node.labels), "properties": dict(node.items())}
 
     def _validate_session_or_raise(self, session: Neo4jSessionWrapper | None) -> None:
-        """Validate session is not None or raise ValueError."""
+        """Raise a NodeError when no session is connected."""
         if session is None:
-            msg = "Neo4j session is required"
-            raise ValueError(msg)
+            raise missing_session_error()
 
     def process(self) -> None:
         """Processes the node to find nodes in the Neo4j database.
@@ -337,53 +329,25 @@ class FindNodes(ControlNode):
             if message_param:
                 message_param._ui_options["hide"] = True
 
+        except NodeError:
+            raise
         except Exception as e:
-            error_msg = f"❌ Failed to find nodes: {e!s}"
-            logger.error(error_msg)
+            raise node_error_from_exception(e, action="find nodes") from e
 
-            # Set error message and make it visible
-            self.parameter_output_values["message"] = error_msg
-            message_param = self.get_parameter_by_name("message")
-            if message_param:
-                message_param._ui_options["hide"] = False
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Validates the search parameters once upstream nodes have supplied them."""
+        exceptions: list[Exception] = []
 
-            # Set outputs to empty/default values
-            self.parameter_output_values["found_nodes"] = []
-            self.parameter_output_values["node_count"] = 0
+        for param_name, label in [("property_filters", "Property Filters"), ("where_parameters", "WHERE Parameters")]:
+            try:
+                parse_json_object(self.get_parameter_value(param_name), label)
+            except NodeError as e:
+                exceptions.append(e)
 
-    def validate_before_workflow_run(self) -> list[Exception] | None:
-        """Validates the node search parameters.
-
-        Returns:
-            List of validation exceptions or None if validation passes
-        """
-        exceptions = []
-
-        # Skip session validation here - it will be validated when the node runs
-        # after dependency resolution has provided the session
-
-        # Validate JSON parameters
-        try:
-            property_filters_str = self.get_parameter_value("property_filters")
-            if property_filters_str.strip():
-                json.loads(property_filters_str)
-        except json.JSONDecodeError as e:
-            exceptions.append(ValueError(f"Invalid JSON in property_filters: {e!s}"))
-
-        try:
-            where_parameters_str = self.get_parameter_value("where_parameters")
-            if where_parameters_str.strip():
-                json.loads(where_parameters_str)
-        except json.JSONDecodeError as e:
-            exceptions.append(ValueError(f"Invalid JSON in where_parameters: {e!s}"))
-
-        # Validate numeric parameters
-        limit = self.get_parameter_value("limit")
-        if limit < 0:
-            exceptions.append(ValueError("Limit must be 0 or greater"))
-
-        skip = self.get_parameter_value("skip")
-        if skip < 0:
-            exceptions.append(ValueError("Skip must be 0 or greater"))
+        for param_name, label in [("limit", "Limit"), ("skip", "Skip")]:
+            value = self.get_parameter_value(param_name)
+            if value < 0:
+                msg = f"'{label}' must be 0 or greater. It is set to {value}."
+                exceptions.append(NodeError(msg, fields={"parameter": label}))
 
         return exceptions if exceptions else None

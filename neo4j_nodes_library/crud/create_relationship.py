@@ -4,13 +4,13 @@ This module provides the `CreateRelationship` class, which allows users to creat
 relationships between existing nodes in a Neo4j database with specified type and properties.
 """
 
-import json
 import logging
 from typing import Any
 
 from connection.neo4j_connection import Neo4jSessionWrapper
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -198,16 +198,9 @@ class CreateRelationship(ControlNode):
             Dictionary of parsed properties
 
         Raises:
-            ValueError: If JSON is invalid
+            NodeError: If JSON is invalid
         """
-        if not properties_str.strip():
-            return {}
-
-        try:
-            return json.loads(properties_str)
-        except json.JSONDecodeError as e:
-            msg = f"Invalid JSON in {param_name}: {e!s}"
-            raise ValueError(msg) from e
+        return parse_json_object(properties_str, param_name)
 
     def _build_node_pattern(self, variable: str, labels: list[str], properties: dict) -> tuple[str, dict]:
         """Builds a node pattern for the query.
@@ -337,16 +330,15 @@ class CreateRelationship(ControlNode):
         }
 
     def _validate_session_or_raise(self, session: Neo4jSessionWrapper | None) -> None:
-        """Validate session is not None or raise ValueError."""
+        """Raise a NodeError when no session is connected."""
         if session is None:
-            msg = "Neo4j session is required"
-            raise ValueError(msg)
+            raise missing_session_error()
 
     def _validate_relationship_type_or_raise(self, rel_type: str) -> None:
-        """Validate relationship type is not empty or raise ValueError."""
+        """Raise a NodeError when the relationship type is empty."""
         if not rel_type.strip():
-            msg = "Relationship type is required"
-            raise ValueError(msg)
+            msg = "'Relationship Type' is empty. Enter a relationship type such as KNOWS and run the node again."
+            raise NodeError(msg, fields={"parameter": "Relationship Type"})
 
     def process(self) -> None:  # noqa: PLR0915
         # Complex Neo4j relationship creation requires comprehensive parameter validation and query building
@@ -424,48 +416,28 @@ class CreateRelationship(ControlNode):
             if message_param:
                 message_param._ui_options["hide"] = True
 
+        except NodeError:
+            raise
         except Exception as e:
-            error_msg = f"❌ Failed to create relationship: {e!s}"
-            logger.error(error_msg)
+            raise node_error_from_exception(e, action="create the relationship") from e
 
-            # Set error message and make it visible
-            self.parameter_output_values["message"] = error_msg
-            message_param = self.get_parameter_by_name("message")
-            if message_param:
-                message_param._ui_options["hide"] = False
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Validates the relationship parameters once upstream nodes have supplied them."""
+        exceptions: list[Exception] = []
 
-            # Set outputs to empty/default values
-            self.parameter_output_values["created_relationship"] = {}
-            self.parameter_output_values["relationship_id"] = 0
+        try:
+            self._validate_relationship_type_or_raise(self.get_parameter_value("relationship_type"))
+        except NodeError as e:
+            exceptions.append(e)
 
-    def validate_before_workflow_run(self) -> list[Exception] | None:
-        """Validates the relationship creation parameters.
-
-        Returns:
-            List of validation exceptions or None if validation passes
-        """
-        exceptions = []
-
-        # Skip session validation here - it will be validated when the node runs
-        # after dependency resolution has provided the session
-
-        # Validate relationship type
-        rel_type = self.get_parameter_value("relationship_type")
-        if not rel_type.strip():
-            exceptions.append(ValueError("Relationship type is required"))
-
-        # Validate JSON parameters
-        json_params = [
-            ("start_node_properties", self.get_parameter_value("start_node_properties")),
-            ("end_node_properties", self.get_parameter_value("end_node_properties")),
-            ("relationship_properties", self.get_parameter_value("relationship_properties")),
-        ]
-
-        for param_name, param_value in json_params:
+        for param_name, label in [
+            ("start_node_properties", "Start Node Properties"),
+            ("end_node_properties", "End Node Properties"),
+            ("relationship_properties", "Relationship Properties"),
+        ]:
             try:
-                if param_value.strip():
-                    json.loads(param_value)
-            except json.JSONDecodeError as e:
-                exceptions.append(ValueError(f"Invalid JSON in {param_name}: {e!s}"))
+                parse_json_object(self.get_parameter_value(param_name), label)
+            except NodeError as e:
+                exceptions.append(e)
 
         return exceptions if exceptions else None
