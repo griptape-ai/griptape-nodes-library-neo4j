@@ -10,9 +10,10 @@ from typing import Any
 
 import neo4j
 from config.neo4j_driver import Neo4jDriverRegistry
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
 from griptape_nodes.traits.options import Options
+from neo4j_errors import node_error_from_exception
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -32,8 +33,8 @@ class Neo4jSessionWrapper:
     def run(self, *args: Any, **kwargs: Any) -> neo4j.Result:
         """Execute a query using the wrapped session."""
         if self._closed:
-            msg = "Session has been closed"
-            raise RuntimeError(msg)
+            msg = "The Neo4j session was closed. Run the Neo4j Connection node again to open a new one."
+            raise NodeError(msg)
         return self._session.run(*args, **kwargs)
 
     def close(self) -> None:
@@ -209,6 +210,7 @@ class Neo4jConnection(ControlNode):
         driver = self.get_parameter_value("driver")
 
         # If no driver is provided, create a default one using the registry
+        default_driver = driver is None
         if driver is None:
             registry = Neo4jDriverRegistry()
             driver = registry.create_default_driver(self.get_config_value)
@@ -270,19 +272,15 @@ class Neo4jConnection(ControlNode):
             if message_param:
                 message_param._ui_options["hide"] = True
 
+        except NodeError:
+            raise
         except Exception as e:
-            error_msg = f"❌ Failed to create Neo4j session: {e!s}"
-            logger.error(error_msg)
-
-            # Set error message and make it visible
-            self.parameter_output_values["message"] = error_msg
-            message_param = self.get_parameter_by_name("message")
-            if message_param:
-                message_param._ui_options["hide"] = False
-
-            # Set outputs to None/empty
-            self.parameter_output_values["session"] = None
-            self.parameter_output_values["connection_info"] = {}
+            raise node_error_from_exception(
+                e,
+                action="open a session",
+                uri=getattr(driver, "uri", None),
+                default_driver=default_driver,
+            ) from e
 
     def validate_before_workflow_run(self) -> list[Exception] | None:
         """Validates the Neo4j connection parameters.

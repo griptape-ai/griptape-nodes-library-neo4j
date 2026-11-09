@@ -4,13 +4,13 @@ This module provides the `CreateNode` class, which allows users to create
 new nodes in a Neo4j database with specified labels and properties.
 """
 
-import json
 import logging
 from typing import Any
 
 from connection.neo4j_connection import Neo4jSessionWrapper
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -140,22 +140,14 @@ class CreateNode(ControlNode):
             Dictionary of parsed properties
 
         Raises:
-            ValueError: If JSON is invalid
+            NodeError: If JSON is invalid
         """
-        if not properties_str.strip():
-            return {}
-
-        try:
-            return json.loads(properties_str)
-        except json.JSONDecodeError as e:
-            msg = f"Invalid JSON in properties: {e!s}"
-            raise ValueError(msg) from e
+        return parse_json_object(properties_str, "Properties")
 
     def _validate_session_or_raise(self, session: Neo4jSessionWrapper | None) -> None:
-        """Validate session is not None or raise ValueError."""
+        """Raise a NodeError when no session is connected."""
         if session is None:
-            msg = "Neo4j session is required"
-            raise ValueError(msg)
+            raise missing_session_error()
 
     def _build_create_query(self, labels: list[str], *, return_node: bool) -> str:
         """Builds the Cypher CREATE query.
@@ -244,37 +236,18 @@ class CreateNode(ControlNode):
             if message_param:
                 message_param._ui_options["hide"] = True
 
+        except NodeError:
+            raise
         except Exception as e:
-            error_msg = f"❌ Failed to create node: {e!s}"
-            logger.error(error_msg)
+            raise node_error_from_exception(e, action="create the node") from e
 
-            # Set error message and make it visible
-            self.parameter_output_values["message"] = error_msg
-            message_param = self.get_parameter_by_name("message")
-            if message_param:
-                message_param._ui_options["hide"] = False
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Validates the node creation parameters once upstream nodes have supplied them."""
+        exceptions: list[Exception] = []
 
-            # Set outputs to empty/default values
-            self.parameter_output_values["created_node"] = {}
-            self.parameter_output_values["node_id"] = 0
-
-    def validate_before_workflow_run(self) -> list[Exception] | None:
-        """Validates the node creation parameters.
-
-        Returns:
-            List of validation exceptions or None if validation passes
-        """
-        exceptions = []
-
-        # Skip session validation here - it will be validated when the node runs
-        # after dependency resolution has provided the session
-
-        # Validate properties JSON
         try:
-            properties_str = self.get_parameter_value("properties")
-            if properties_str.strip():
-                json.loads(properties_str)
-        except json.JSONDecodeError as e:
-            exceptions.append(ValueError(f"Invalid JSON in properties: {e!s}"))
+            parse_json_object(self.get_parameter_value("properties"), "Properties")
+        except NodeError as e:
+            exceptions.append(e)
 
         return exceptions if exceptions else None

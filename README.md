@@ -171,7 +171,7 @@ Removes nodes with safety confirmation.
 ## Common Patterns
 
 ### Error Handling
-All nodes provide comprehensive error messages with troubleshooting guidance. Check the `message` output for detailed error information.
+When a node fails, it stops the run and the editor shows the error on the node. Under More info, the Neo4j server's error code and text appear as fields and a response. A rejected username or password links to the `NEO4J_USERNAME` and `NEO4J_PASSWORD` settings when the connection uses the library defaults, and a Cypher syntax error links to the Cypher manual. The `message` output only reports success.
 
 ### Authentication
 Set environment variables for automatic authentication:
@@ -182,7 +182,7 @@ export NEO4J_PASSWORD="your-password"
 ```
 
 ### JSON Data Format
-Properties should be provided as valid JSON strings:
+Properties should be provided as valid JSON objects:
 ```json
 {"name": "Alice", "age": 30, "city": "New York"}
 ```
@@ -197,6 +197,7 @@ Always connect a session from Neo4j Connection or Neo4j Driver to other nodes. S
 - Check URI format (bolt://, neo4j://, etc.)
 - Confirm authentication credentials
 - Test network connectivity
+- Open More info on the failed node to see the server's response
 
 ### Query Problems  
 - Validate Cypher syntax
@@ -218,7 +219,7 @@ Always connect a session from Neo4j Connection or Neo4j Driver to other nodes. S
 ## Support
 
 For issues and questions:
-- Check node `message` outputs for specific error guidance
+- Open More info on a failed node for the server's error code and message
 - Review Neo4j server logs
 - Verify JSON parameter formatting
 - Test connections with simple queries first

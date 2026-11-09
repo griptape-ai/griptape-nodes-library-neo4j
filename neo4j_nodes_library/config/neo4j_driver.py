@@ -17,10 +17,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 import neo4j
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import DataNode
 from griptape_nodes.traits.options import Options
 from neo4j import GraphDatabase
+from neo4j_errors import node_error_from_exception
 
 # NOTE: There is a known bug in the Neo4j Python driver where __del__ methods fail
 # with "AttributeError: 'NoneType' object has no attribute 'close'" during garbage
@@ -397,89 +398,10 @@ class Neo4jDriver(DataNode):
             self.parameter_output_values["driver"] = driver_wrapper
             self.parameter_output_values["message"] = "✓ Neo4j driver created and tested successfully"
 
+        except NodeError:
+            raise
         except Exception as e:
-            # No need to clean up driver wrapper since registry handles lifecycle
-
-            # Import Neo4j exception types for proper matching
-            import socket
-
-            from neo4j.exceptions import AuthError, ConfigurationError, ServiceUnavailable
-
-            # Provide specific, actionable error messages based on exception type
-            if isinstance(e, ServiceUnavailable):
-                error_msg = (
-                    f"❌ Neo4j Service Unavailable: Cannot connect to Neo4j at {uri}\n"
-                    f"Solutions:\n"
-                    f"• Check that Neo4j is running\n"
-                    f"• Verify the URI is correct (currently: {uri})\n"
-                    f"• Check firewall settings\n"
-                    f"• Try running: docker run --publish=7474:7474 --publish=7687:7687 neo4j"
-                )
-
-            elif isinstance(e, AuthError):
-                error_msg = (
-                    f"❌ Neo4j Authentication Failed: Invalid credentials\n"
-                    f"Solutions:\n"
-                    f"• Check username/password (currently using: {username})\n"
-                    f"• Verify auth type is correct (currently: {auth_type})\n"
-                    f"• For default Neo4j: username='neo4j', password=<your-password>\n"
-                    f"• Reset password: neo4j-admin set-initial-password <new-password>"
-                )
-
-            elif isinstance(e, ConfigurationError):
-                error_msg = (
-                    f"❌ Neo4j Configuration Error: Invalid connection configuration\n"
-                    f"Solutions:\n"
-                    f"• Check URI format: {uri}\n"
-                    f"• Verify connection timeout: {connection_timeout}s\n"
-                    f"• Check max connection lifetime: {max_connection_lifetime}s"
-                )
-
-            elif isinstance(e, (socket.gaierror, socket.error)):
-                error_msg = (
-                    f"❌ Neo4j Network Error: Cannot resolve or connect to host\n"
-                    f"Solutions:\n"
-                    f"• Check the hostname in URI: {uri}\n"
-                    f"• Try using IP address instead: bolt://127.0.0.1:7687\n"
-                    f"• Check DNS settings\n"
-                    f"• Verify Neo4j is listening on the correct port"
-                )
-
-            elif isinstance(e, ConnectionRefusedError):
-                error_msg = (
-                    f"❌ Neo4j Connection Refused: Neo4j is not accepting connections\n"
-                    f"Solutions:\n"
-                    f"• Ensure Neo4j is running on {uri}\n"
-                    f"• Check if port 7687 is available\n"
-                    f"• Verify firewall/security settings\n"
-                    f"• Check Neo4j configuration (neo4j.conf)"
-                )
-
-            elif isinstance(e, TimeoutError):
-                error_msg = (
-                    f"❌ Neo4j Connection Timeout: Connection took too long\n"
-                    f"Solutions:\n"
-                    f"• Increase connection timeout (currently: {connection_timeout}s)\n"
-                    f"• Check network connectivity to {uri}\n"
-                    f"• Verify Neo4j is responding (not overloaded)"
-                )
-
-            else:
-                error_msg = (
-                    f"❌ Neo4j Connection Error: {type(e).__name__}: {e}\n"
-                    f"Troubleshooting:\n"
-                    f"• URI: {uri}\n"
-                    f"• Username: {username}\n"
-                    f"• Auth Type: {auth_type}\n"
-                    f"• Connection Timeout: {connection_timeout}s\n"
-                    f"• Check Neo4j server logs for more details"
-                )
-
-            logger.error(error_msg)
-            self.parameter_output_values["message"] = error_msg
-
-            # Re-raise the exception to abort the flow
-            raise RuntimeError(error_msg) from e
+            raise node_error_from_exception(e, action="connect to Neo4j", uri=uri) from e
 
     def validate_before_workflow_run(self) -> list[Exception] | None:
         """Validates the Neo4j connection parameters.

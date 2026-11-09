@@ -10,8 +10,9 @@ import logging
 from typing import Any
 
 import neo4j
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -271,23 +272,18 @@ class ExecuteCypher(ControlNode):
             Dictionary of parsed parameters
 
         Raises:
-            ValueError: If JSON string is invalid or input type is unsupported
+            NodeError: If JSON string is invalid or input type is unsupported
         """
         if isinstance(parameters_input, dict):
             return parameters_input
 
         if isinstance(parameters_input, str):
-            if not parameters_input.strip():
-                return {}
+            return parse_json_object(parameters_input, "Parameters")
 
-            try:
-                return json.loads(parameters_input)
-            except json.JSONDecodeError as e:
-                msg = f"Invalid JSON in parameters: {e!s}"
-                raise ValueError(msg) from e
-
-        msg = f"ExecuteCypher: parameters input must be str or dict, got {type(parameters_input)}"
-        raise ValueError(msg)
+        msg = (
+            f"'Parameters' must be a JSON object, not {type(parameters_input).__name__}. Fix it and run the node again."
+        )
+        raise NodeError(msg, fields={"parameter": "Parameters"})
 
     def process(self) -> None:
         """Processes the node to execute the Cypher query.
@@ -327,65 +323,45 @@ class ExecuteCypher(ControlNode):
             # Set success outputs
             self._set_success_outputs(records, record_count, summary_info)
 
+        except NodeError:
+            raise
         except Exception as e:
-            # Handle potential Neo4j objects in error messages
-            try:
-                # Check if this is a conversion error by looking at the exception type and message
-                if "Node element_id=" in str(e):
-                    error_str = f"Query executed successfully but failed to convert results to JSON. This may be due to complex Neo4j objects in the query results. Original error: {type(e).__name__}"
-                else:
-                    error_str = str(e)
-            except Exception:
-                error_str = f"{type(e).__name__}: [Error converting exception to string]"
+            # Neo4j objects in an error message can fail to serialize, so name the conversion problem instead.
+            if "Node element_id=" in str(e):
+                msg = (
+                    "The query ran, but its results could not be converted to JSON. "
+                    "Check that the query does not return Neo4j objects that cannot be converted."
+                )
+                raise NodeError(msg, response={"error": type(e).__name__}) from e
+            raise node_error_from_exception(e, action="run the query") from e
 
-            self._set_error_outputs(error_str)
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Validates the query parameters once upstream nodes have supplied them."""
+        exceptions: list[Exception] = []
 
-    def validate_before_workflow_run(self) -> list[Exception] | None:
-        """Validates the query execution parameters.
+        if not self.get_parameter_value("cypher_query").strip():
+            msg = "'Cypher Query' is empty. Enter a Cypher query and run the node again."
+            exceptions.append(NodeError(msg, fields={"parameter": "Cypher Query"}))
 
-        Returns:
-            List of validation exceptions or None if validation passes
-        """
-        exceptions = []
-
-        # Skip session validation here - it will be validated when the node runs
-        # after dependency resolution has provided the session
-
-        # Validate query
-        cypher_query = self.get_parameter_value("cypher_query")
-        if not cypher_query.strip():
-            exceptions.append(ValueError("Cypher query cannot be empty"))
-
-        # Validate parameters JSON
         try:
-            parameters_input = self.get_parameter_value("parameters")
-            if isinstance(parameters_input, str):
-                if parameters_input.strip():
-                    json.loads(parameters_input)
-            elif isinstance(parameters_input, dict):
-                # Dict is already valid, no validation needed
-                pass
-            else:
-                exceptions.append(ValueError(f"Parameters must be string or dict, got {type(parameters_input)}"))
-        except json.JSONDecodeError as e:
-            exceptions.append(ValueError(f"Invalid JSON in parameters: {e!s}"))
+            self._parse_parameters(self.get_parameter_value("parameters"))
+        except NodeError as e:
+            exceptions.append(e)
 
-        # Validate limit
         limit = self.get_parameter_value("limit")
         if limit < 0:
-            exceptions.append(ValueError("Limit must be 0 or greater"))
+            msg = f"'Limit' must be 0 or greater. It is set to {limit}."
+            exceptions.append(NodeError(msg, fields={"parameter": "Limit"}))
 
         return exceptions if exceptions else None
 
     def _validate_inputs(self, session: neo4j.Session | None, cypher_query: str) -> None:
         """Validate input parameters before execution."""
         if session is None:
-            msg = "Neo4j session is required"
-            raise ValueError(msg)
-
+            raise missing_session_error()
         if not cypher_query.strip():
-            msg = "Cypher query cannot be empty"
-            raise ValueError(msg)
+            msg = "'Cypher Query' is empty. Enter a Cypher query and run the node again."
+            raise NodeError(msg, fields={"parameter": "Cypher Query"})
 
     def _convert_single_record(self, record: Any, record_count: int) -> dict[str, Any]:
         """Convert a single Neo4j record to a dictionary."""
@@ -424,6 +400,8 @@ class ExecuteCypher(ControlNode):
                 converted_record = self._convert_single_record(record, record_count)
                 records.append(converted_record)
                 record_count += 1
+        except neo4j.exceptions.Neo4jError:
+            raise
         except Exception as e:
             logger.warning("Error during result streaming: %s", e)
 
@@ -469,19 +447,3 @@ class ExecuteCypher(ControlNode):
         message_param = self.get_parameter_by_name("message")
         if message_param:
             message_param._ui_options["hide"] = True
-
-    def _set_error_outputs(self, error_str: str) -> None:
-        """Set output parameters for failed execution."""
-        error_msg = f"❌ Failed to execute Cypher query: {error_str}"
-        logger.error(error_msg)
-
-        # Set error message and make it visible
-        self.parameter_output_values["message"] = error_msg
-        message_param = self.get_parameter_by_name("message")
-        if message_param:
-            message_param._ui_options["hide"] = False
-
-        # Set outputs to empty/default values
-        self.parameter_output_values["results"] = []
-        self.parameter_output_values["summary"] = {}
-        self.parameter_output_values["record_count"] = 0
