@@ -68,7 +68,13 @@ def node_error_from_exception(
     if isinstance(error, neo4j_exceptions.ConfigurationError):
         message = "The Neo4j connection settings are not valid. Check 'Database URI', then run the node again."
         return NodeError(message, response={"error": type(error).__name__, "message": str(error)})
-    if isinstance(error, (neo4j_exceptions.DriverError, OSError)):
+    if isinstance(error, neo4j_exceptions.IncompleteCommit):
+        message = (
+            f"Neo4j lost the connection before confirming that it could {action}, so the change may or may not "
+            "have been saved. Check the data before running the node again."
+        )
+        return NodeError(message, response={"error": type(error).__name__, "message": str(error)})
+    if isinstance(error, (neo4j_exceptions.ServiceUnavailable, neo4j_exceptions.SessionExpired, OSError)):
         target = f" at {uri}" if uri else ""
         message = (
             f"Cannot connect to the Neo4j server{target}. "

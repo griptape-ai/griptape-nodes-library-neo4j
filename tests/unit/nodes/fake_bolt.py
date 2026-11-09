@@ -150,6 +150,17 @@ class FakeBolt:
                 elif tag == 0x3F:  # PULL
                     if pending_failure:
                         conn.sendall(struct_msg(0x7E))
+                    elif "STREAMFAIL" in self.queries[-1]:
+                        conn.sendall(
+                            struct_msg(
+                                0x7F,
+                                {
+                                    "code": "Neo.ClientError.Statement.ArithmeticError",
+                                    "message": "/ by zero",
+                                },
+                            )
+                        )
+                        pending_failure = True
                     else:
                         q = self.queries[-1]
                         if q.startswith("RETURN 1"):

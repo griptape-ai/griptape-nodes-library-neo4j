@@ -159,3 +159,64 @@ def test_crud_node_without_a_session_raises_node_error():
     node = stub_node(load_node("crud/create_node.py", "CreateNode"), {"session": None})
     with pytest.raises(NodeError, match="No Neo4j session is connected"):
         node._validate_session_or_raise(None)
+
+
+def test_a_failure_while_streaming_keeps_the_servers_code_and_message(server):
+    driver = neo4j.GraphDatabase.driver(f"bolt://127.0.0.1:{server.port}", auth=neo4j.basic_auth("neo4j", "good"))
+    try:
+        with driver.session() as session:
+            result = session.run("STREAMFAIL")
+            node = object.__new__(load_node("query/execute_cypher.py", "ExecuteCypher"))
+            with pytest.raises(neo4j.exceptions.Neo4jError) as raised:
+                node._process_results_streaming(result, 0, [], 0)
+    finally:
+        driver.close()
+    error = node_error_from_exception(raised.value, action="run the query")
+    assert str(error) == "Neo4j could not run the query: / by zero"
+    assert error.fields == {"error_code": "Neo.ClientError.Statement.ArithmeticError"}
+
+
+def test_consuming_a_failed_result_is_not_reported_as_a_connection_failure(server):
+    driver = neo4j.GraphDatabase.driver(f"bolt://127.0.0.1:{server.port}", auth=neo4j.basic_auth("neo4j", "good"))
+    try:
+        with driver.session() as session:
+            result = session.run("STREAMFAIL")
+            with pytest.raises(neo4j.exceptions.Neo4jError):
+                list(result)
+            with pytest.raises(neo4j.exceptions.ResultFailedError) as raised:
+                result.consume()
+    finally:
+        driver.close()
+    error = node_error_from_exception(raised.value, action="run the query")
+    assert "Cannot connect" not in str(error)
+    assert str(error).startswith("Could not run the query:")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        neo4j.exceptions.ResultFailedError(None, "boom"),
+        neo4j.exceptions.ResultConsumedError(None, "boom"),
+        neo4j.exceptions.SessionError(None, "boom"),
+        neo4j.exceptions.TransactionError(None, "boom"),
+        neo4j.exceptions.IncompleteCommit("boom"),
+    ],
+    ids=lambda e: type(e).__name__,
+)
+def test_other_driver_errors_are_not_connection_failures(error):
+    assert "Cannot connect" not in str(node_error_from_exception(error, action="run the query"))
+
+
+@pytest.mark.parametrize("value", ["[1, 2]", '"x"'])
+def test_cypher_parameters_must_be_an_object(value):
+    node = stub_node(
+        load_node("query/execute_cypher.py", "ExecuteCypher"),
+        {"cypher_query": "RETURN 1", "parameters": value, "limit": 0},
+    )
+    errors = node.validate_before_node_run()
+    assert errors is not None
+    assert [e.fields for e in errors] == [{"parameter": "Parameters"}]
+    assert str(errors[0]).startswith("'Parameters' must be a JSON object")
+    with pytest.raises(NodeError, match="'Parameters' must be a JSON object") as raised:
+        node._parse_parameters(value)
+    assert raised.value.fields == {"parameter": "Parameters"}

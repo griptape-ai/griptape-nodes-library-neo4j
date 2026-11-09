@@ -12,7 +12,7 @@ from typing import Any
 import neo4j
 from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import ControlNode
-from neo4j_errors import missing_session_error, node_error_from_exception
+from neo4j_errors import missing_session_error, node_error_from_exception, parse_json_object
 
 logger = logging.getLogger("griptape_nodes")
 
@@ -278,17 +278,7 @@ class ExecuteCypher(ControlNode):
             return parameters_input
 
         if isinstance(parameters_input, str):
-            if not parameters_input.strip():
-                return {}
-
-            try:
-                return json.loads(parameters_input)
-            except json.JSONDecodeError as e:
-                msg = (
-                    f"'Parameters' is not valid JSON: {e.msg} (line {e.lineno}, column {e.colno}). "
-                    "Fix it and run the node again."
-                )
-                raise NodeError(msg, fields={"parameter": "Parameters"}) from e
+            return parse_json_object(parameters_input, "Parameters")
 
         msg = (
             f"'Parameters' must be a JSON object, not {type(parameters_input).__name__}. Fix it and run the node again."
@@ -410,6 +400,8 @@ class ExecuteCypher(ControlNode):
                 converted_record = self._convert_single_record(record, record_count)
                 records.append(converted_record)
                 record_count += 1
+        except neo4j.exceptions.Neo4jError:
+            raise
         except Exception as e:
             logger.warning("Error during result streaming: %s", e)
 
